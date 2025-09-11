@@ -18,19 +18,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Configuration - Updated to prioritize EXPO_PUBLIC_API_URL
-const CLOUDINARY_CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-// Priority: 1. EXPO_PUBLIC_API_URL (production/staging), 2. localhost (development fallback)
+// Configuration
+const UPLOADTHING_API_KEY = process.env.EXPO_PUBLIC_UPLOADTHING_API_KEY;
+const UPLOADTHING_APP_ID = process.env.EXPO_PUBLIC_UPLOADTHING_APP_ID;
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const GOOGLE_API_KEY=process.env.GOOGLE_API_KEY
 
-// Helper function to check if we're using localhost
-const isUsingLocalhost = () => {
+// Helper functions
+const isUsingLocalhost = (): boolean => {
   return API_BASE_URL.includes('127.0.0.1') || API_BASE_URL.includes('localhost');
 };
 
-// Helper function to get environment info
 const getEnvironmentInfo = () => {
   const usingLocalhost = isUsingLocalhost();
   return {
@@ -39,6 +37,26 @@ const getEnvironmentInfo = () => {
     environment: usingLocalhost ? 'Development (Local)' : 'Production/Staging'
   };
 };
+
+// Interfaces
+interface Education {
+  Degree: string;
+  University: string;
+  Year: string;
+}
+
+interface Experience {
+  Company: string;
+  Role: string;
+  Duration: string;
+  Description: string;
+}
+
+interface Project {
+  Name: string;
+  Description: string;
+  Technologies?: string[];
+}
 
 interface ParsedResumeData {
   // Personal Info
@@ -62,23 +80,10 @@ interface ParsedResumeData {
   Skills?: string[];
   
   // Experience & Education
-  Experience?: Array<{
-    Company: string;
-    Role: string;
-    Duration: string;
-    Description: string;
-  }>;
-  Education?: Array<{
-    Degree: string;
-    University: string;
-    Year: string;
-  }>;
+  Experience?: Experience[];
+  Education?: Education[];
   Certifications?: string[];
-  Projects?: Array<{
-    Name: string;
-    Description: string;
-    Technologies?: string[];
-  }>;
+  Projects?: Project[];
   
   // Social Links
   "LinkedIn Profile"?: string;
@@ -86,27 +91,54 @@ interface ParsedResumeData {
   "Portfolio URL"?: string;
 }
 
-const SeekerProfile = () => {
+interface UploadedFile {
+  url: string;
+  name: string;
+  uploadDate: string;
+}
+
+const SeekerProfile: React.FC = () => {
+  // Auth hooks
   const { signOut, userId } = useAuth();
-  const router = useRouter();
-  const [selectedFile, setSelectedFile] = useState<any>(null);
-  const [clerkId, setClerkId] = useState("");
   const { user } = useUser();
+  const router = useRouter();
+
+  // User metadata
   const userRole = user?.unsafeMetadata?.role || "JOB_SEEKER";
   const isNew = user?.unsafeMetadata?.new;
-  const [isUploading, setIsUploading] = useState(false);
+
+  // State management
+  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [clerkId, setClerkId] = useState<string>("");
+  const [isUploading, setIsUploading] = useState<boolean>(false);
   const [parsedData, setParsedData] = useState<ParsedResumeData | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{url: string, name: string, uploadDate: string}>>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   
-  // States for editing functionality
-  const [isEditing, setIsEditing] = useState(false);
+  // Editing state
+  const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editedData, setEditedData] = useState<ParsedResumeData | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(false);
 
-  // Function to open resume URL
-  const openResume = async (url: string) => {
+  // Utility functions
+  const showAlert = (title: string, message: string): void => {
+    Alert.alert(title, message);
+  };
+
+  const isProperlyConfigured = (): boolean => {
+    if (!UPLOADTHING_API_KEY || !UPLOADTHING_APP_ID) {
+      console.error("UploadThing configuration missing!");
+      showAlert(
+        "Configuration Error", 
+        "UploadThing configuration is missing. Please set up your environment variables."
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const openResume = async (url: string): Promise<void> => {
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
@@ -120,8 +152,27 @@ const SeekerProfile = () => {
     }
   };
 
-  // Fetch existing user profile from backend
-  const fetchUserProfile = async () => {
+  // Profile management functions
+  const initializeBasicProfile = (): void => {
+    if (user) {
+      const basicData: ParsedResumeData = {
+        "First Name": user.firstName || "",
+        "Last Name": user.lastName || "",
+        "Full Name": user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "",
+        Email: user.primaryEmailAddress?.emailAddress || "",
+        Role: "job_seeker",
+        Skills: [],
+        Education: [],
+        Experience: [],
+        Projects: [],
+        Certifications: [],
+      };
+      setParsedData(basicData);
+      setEditedData(basicData);
+    }
+  };
+
+  const fetchUserProfile = async (): Promise<void> => {
     if (!userId) return;
 
     try {
@@ -137,7 +188,6 @@ const SeekerProfile = () => {
         setUserProfile(profile);
         console.log("Profile data received:", profile);
         
-        // If user already has parsed resume data, show it
         if (profile.skills || profile.experience || profile.technical_skills || profile.soft_skills) {
           const formattedData: ParsedResumeData = {
             // Personal Info
@@ -155,9 +205,9 @@ const SeekerProfile = () => {
             "Resume file": profile.resume_filename,
             "Resume URL": profile.resume_url,
             
-            // Skills - prioritize categorized skills over general skills
-            "Technical Skills": profile.technical_skills && profile.technical_skills.length > 0 ? profile.technical_skills : null,
-            "Soft Skills": profile.soft_skills && profile.soft_skills.length > 0 ? profile.soft_skills : null,
+            // Skills
+            "Technical Skills": profile.technical_skills?.length > 0 ? profile.technical_skills : null,
+            "Soft Skills": profile.soft_skills?.length > 0 ? profile.soft_skills : null,
             Skills: profile.skills,
             
             // Social Links
@@ -187,7 +237,6 @@ const SeekerProfile = () => {
           setParsedData(formattedData);
           setEditedData(formattedData);
           
-          // Add to uploaded files if resume exists
           if (profile.resume_url && profile.resume_filename) {
             setUploadedFiles([{
               url: profile.resume_url,
@@ -196,7 +245,6 @@ const SeekerProfile = () => {
             }]);
           }
         } else {
-          // Initialize with basic user data from Clerk if no profile exists
           initializeBasicProfile();
         }
       }
@@ -211,27 +259,7 @@ const SeekerProfile = () => {
     }
   };
 
-  const initializeBasicProfile = () => {
-    if (user) {
-      const basicData: ParsedResumeData = {
-        "First Name": user.firstName || "",
-        "Last Name": user.lastName || "",
-        "Full Name": user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "",
-        Email: user.primaryEmailAddress?.emailAddress || "",
-        Role: "job_seeker",
-        Skills: [],
-        Education: [],
-        Experience: [],
-        Projects: [],
-        Certifications: [],
-      };
-      setParsedData(basicData);
-      setEditedData(basicData);
-    }
-  };
-
-  // Save/Update user profile to backend
-  const saveProfileToBackend = async (profileData: ParsedResumeData) => {
+  const saveProfileToBackend = async (profileData: ParsedResumeData): Promise<boolean> => {
     if (!userId) return false;
 
     try {
@@ -308,50 +336,14 @@ const SeekerProfile = () => {
     }
   };
 
-  // Set clerkId and fetch profile
-  useEffect(() => {
-    if (userId) {
-      setClerkId(userId);
-      if (!isNew) {
-        fetchUserProfile();
-      } else {
-        initializeBasicProfile();
-      }
-    }
-  }, [userId, user, isNew]);
-
-  // Update editedData when parsedData changes
-  useEffect(() => {
-    if (parsedData) {
-      setEditedData({ ...parsedData });
-    }
-  }, [parsedData]);
-
-  const showAlert = (title: string, message: string) => {
-    Alert.alert(title, message);
-  };
-
-  // Check if services are properly configured
-  const isProperlyConfigured = () => {
-    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
-      console.error("Cloudinary configuration missing!");
-      showAlert(
-        "Configuration Error", 
-        "Cloudinary configuration is missing. Please set up your environment variables."
-      );
-      return false;
-    }
-    return true;
-  };
-
-  // Upload to Cloudinary
-  const uploadToCloudinary = async (file: any) => {
+  // File upload functions
+  const uploadToUploadThing = async (file: any): Promise<string> => {
     try {
       if (!isProperlyConfigured()) {
-        throw new Error("Cloudinary not configured");
+        throw new Error("UploadThing not configured");
       }
 
-      console.log('Starting Cloudinary upload...');
+      console.log('Starting UploadThing upload...');
       console.log('File details:', {
         name: file.name,
         size: file.size,
@@ -359,70 +351,88 @@ const SeekerProfile = () => {
         uri: file.uri
       });
 
-      const formData = new FormData();
+      // Get presigned URL from UploadThing
+      const presignedResponse = await fetch(`https://api.uploadthing.com/v6/uploadFiles`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Uploadthing-Api-Key": UPLOADTHING_API_KEY!,
+          "X-Uploadthing-Version": "6.13.2",
+        },
+        body: JSON.stringify({
+          files: [{
+            name: file.name,
+            size: file.size,
+            type: file.mimeType || "application/pdf",
+          }],
+          metadata: {
+            userId: userId || 'anonymous',
+            uploadDate: new Date().toISOString(),
+            fileType: 'resume',
+            category: 'jobswipe'
+          },
+          contentDisposition: "inline"
+        }),
+      });
+
+      if (!presignedResponse.ok) {
+        const errorText = await presignedResponse.text();
+        console.error('UploadThing presigned URL error:', errorText);
+        throw new Error(`Failed to get upload URL: ${presignedResponse.status}`);
+      }
+
+      const presignedData = await presignedResponse.json();
+      console.log('Presigned URL response:', presignedData);
+
+      if (!presignedData.data || presignedData.data.length === 0) {
+        throw new Error("No presigned URL received from UploadThing");
+      }
+
+      const uploadData = presignedData.data[0];
+      const { url: presignedUrl, fields } = uploadData;
+
+      // Upload file using presigned URL
+      const uploadFormData = new FormData();
       
-      formData.append("file", {
+      Object.keys(fields).forEach(key => {
+        uploadFormData.append(key, fields[key]);
+      });
+
+      uploadFormData.append("file", {
         uri: file.uri,
         type: file.mimeType || "application/pdf",
         name: file.name,
       } as any);
-      
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET!);
-      formData.append("resource_type", "auto");
-      formData.append("folder", "jobswipe/resumes");
-      formData.append("tags", "resume,jobswipe,job_seeker");
-      
-      if (userId) {
-        formData.append("context", `user_id=${userId}|upload_date=${new Date().toISOString()}`);
-      }
 
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Cloudinary upload error:', errorText);
-        
-        let errorMessage = "Failed to upload to Cloudinary";
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error?.message || errorMessage;
-        } catch (parseError) {
-          errorMessage = `Cloudinary error: ${response.status}`;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      
-      console.log('Cloudinary upload successful:', {
-        public_id: result.public_id,
-        secure_url: result.secure_url,
-        resource_type: result.resource_type,
-        bytes: result.bytes
+      const uploadResponse = await fetch(presignedUrl, {
+        method: "POST",
+        body: uploadFormData,
       });
 
-      return result.secure_url;
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('UploadThing file upload error:', errorText);
+        throw new Error(`File upload failed: ${uploadResponse.status}`);
+      }
+
+      const fileUrl = `https://utfs.io/f/${uploadData.key}`;
+      console.log('UploadThing upload successful:', fileUrl);
+      return fileUrl;
+
     } catch (error: any) {
-      console.error("Cloudinary upload error:", error);
+      console.error("UploadThing upload error:", error);
       
-      let errorMessage = "Failed to upload to Cloudinary";
+      let errorMessage = "Failed to upload to UploadThing";
       
       if (error.message?.includes('unauthorized') || error.message?.includes('401')) {
-        errorMessage = "Upload preset configuration error. Please check your Cloudinary settings.";
+        errorMessage = "UploadThing API key configuration error. Please check your credentials.";
       } else if (error.message?.includes('network') || error.message?.includes('Network')) {
         errorMessage = "Network error. Please check your internet connection.";
       } else if (error.message?.includes('timeout')) {
         errorMessage = "Upload timeout. Please try again.";
       } else if (error.message?.includes('file size') || error.message?.includes('too large')) {
         errorMessage = "File is too large. Please select a smaller file.";
-      } else if (error.message && error.message !== "Failed to upload to Cloudinary") {
+      } else if (error.message && error.message !== "Failed to upload to UploadThing") {
         errorMessage = error.message;
       }
       
@@ -430,7 +440,7 @@ const SeekerProfile = () => {
     }
   };
 
-  const pickDocument = async () => {
+  const pickDocument = async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -457,13 +467,9 @@ const SeekerProfile = () => {
     }
   };
 
-  // Updated handleUpload function
-  const handleUpload = async () => {
+  const handleUpload = async (): Promise<void> => {
     if (!selectedFile || !clerkId) {
-      showAlert(
-        "Missing Information",
-        "Please select a file"
-      );
+      showAlert("Missing Information", "Please select a file");
       return;
     }
 
@@ -474,12 +480,13 @@ const SeekerProfile = () => {
     setIsUploading(true);
 
     try {
-      // Step 1: Upload to Cloudinary
-      console.log("Step 1: Uploading to Cloudinary...");
-      const cloudinaryUrl = await uploadToCloudinary(selectedFile);
-      console.log("Cloudinary URL:", cloudinaryUrl);
+      // Step 1: Upload to UploadThing first
+      console.log("Step 1: Uploading to UploadThing...");
+      const uploadThingUrl = await uploadToUploadThing(selectedFile);
+      console.log("UploadThing URL:", uploadThingUrl);
 
-      // Step 2: Create FormData for backend
+      // Step 2: Send file to backend for parsing with UploadThing URL
+      console.log("Step 2: Sending file to backend for parsing...");
       const formData = new FormData();
       formData.append("file", {
         uri: selectedFile.uri,
@@ -488,32 +495,60 @@ const SeekerProfile = () => {
       } as any);
       formData.append("clerk_id", clerkId);
       formData.append("user_role", "job_seeker");
-      formData.append("resume_url", cloudinaryUrl);
+      formData.append("resume_url", uploadThingUrl);
+      formData.append("resume_filename", selectedFile.name);
+      
+      // Add API key if available (for backend parsing services)
+      if (UPLOADTHING_API_KEY) {
+        formData.append("api_key", UPLOADTHING_API_KEY);
+      }
 
-      // Step 3: Send to backend for parsing
       const response = await fetch(
         `${API_BASE_URL}/api/users/upload`,
         {
           method: "POST",
           body: formData,
           headers: {
-            "Content-Type": "multipart/form-data",
+            // Try different API key configurations in headers
+            ...(GOOGLE_API_KEY && {
+              'X-API-Key': GOOGLE_API_KEY,
+              'Authorization': `Bearer ${GOOGLE_API_KEY}`,
+              'Google-API-Key': GOOGLE_API_KEY,
+              'api-key': GOOGLE_API_KEY
+            }),
+            ...(UPLOADTHING_API_KEY && !GOOGLE_API_KEY && {
+              'X-API-Key': UPLOADTHING_API_KEY,
+              'Authorization': `Bearer ${UPLOADTHING_API_KEY}`,
+              'UploadThing-API-Key': UPLOADTHING_API_KEY,
+              'api-key': UPLOADTHING_API_KEY
+            }),
             Accept: "application/json",
           },
         }
       );
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Upload failed");
+      if (!response.ok) {
+        console.error("Backend parsing error:", data);
+        throw new Error(data.detail || data.message || "Backend parsing failed");
+      }
 
+      // Handle parsed data from backend
       if (data) {
-        setParsedData(data);
-        setEditedData(data);
-        console.log("Parsed data from upload:", data);
+        // Update parsed data with UploadThing URL
+        const updatedData = {
+          ...data,
+          "Resume URL": uploadThingUrl,
+          "Resume file": selectedFile.name
+        };
+        
+        setParsedData(updatedData);
+        setEditedData(updatedData);
+        console.log("Parsed data from backend:", updatedData);
         
         // Add to uploaded files list
-        const newUploadedFile = {
-          url: cloudinaryUrl,
+        const newUploadedFile: UploadedFile = {
+          url: uploadThingUrl,
           name: selectedFile.name,
           uploadDate: new Date().toLocaleString()
         };
@@ -523,19 +558,34 @@ const SeekerProfile = () => {
       // Refresh user profile
       await fetchUserProfile();
       
-      showAlert("Success", "Resume uploaded and parsed successfully!");
+      showAlert("Success", "Resume uploaded to cloud storage and parsed successfully!");
       setSelectedFile(null);
       
     } catch (error: any) {
       console.error("Upload/Parse error:", error);
-      showAlert("Upload Error", error.message || "Failed to upload and parse resume");
+      
+      let errorMessage = "Failed to process resume";
+      
+      if (error.message?.includes("Must supply api_key")) {
+        errorMessage = "Backend API key configuration error. Please check your server configuration.";
+      } else if (error.message?.includes("UploadThing")) {
+        errorMessage = "Failed to upload file to cloud storage. " + error.message;
+      } else if (error.message?.includes("Backend") || error.message?.includes("parsing")) {
+        errorMessage = "File uploaded successfully but parsing failed. " + error.message;
+      } else if (error.message?.includes("Network") || error.message?.includes("fetch")) {
+        errorMessage = "Network error. Please check your connection and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showAlert("Upload Error", errorMessage);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Handle saving edited data
-  const handleSaveChanges = async () => {
+  // Edit handlers
+  const handleSaveChanges = async (): Promise<void> => {
     if (!editedData || !userId) {
       showAlert("Error", "No data to save");
       return;
@@ -557,12 +607,12 @@ const SeekerProfile = () => {
     }
   };
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = (): void => {
     setEditedData(parsedData ? { ...parsedData } : null);
     setIsEditing(false);
   };
 
-  const handleSignOut = async () => {
+  const handleSignOut = async (): Promise<void> => {
     try {
       await signOut();
       router.replace("../components/sign-in");
@@ -571,8 +621,8 @@ const SeekerProfile = () => {
     }
   };
 
-  // Helper functions for editing
-  const updateBasicInfo = (field: string, value: string | boolean) => {
+  // Update functions for editing
+  const updateBasicInfo = (field: string, value: string | boolean): void => {
     if (!editedData) return;
     setEditedData({
       ...editedData,
@@ -580,7 +630,7 @@ const SeekerProfile = () => {
     });
   };
 
-  const updateSkill = (index: number, value: string) => {
+  const updateSkill = (index: number, value: string): void => {
     if (!editedData || !editedData.Skills) return;
     const updatedSkills = [...editedData.Skills];
     updatedSkills[index] = value;
@@ -590,7 +640,7 @@ const SeekerProfile = () => {
     });
   };
 
-  const addSkill = () => {
+  const addSkill = (): void => {
     if (!editedData) return;
     const updatedSkills = editedData.Skills ? [...editedData.Skills, ""] : [""];
     setEditedData({
@@ -599,7 +649,7 @@ const SeekerProfile = () => {
     });
   };
 
-  const removeSkill = (index: number) => {
+  const removeSkill = (index: number): void => {
     if (!editedData || !editedData.Skills) return;
     const updatedSkills = editedData.Skills.filter((_, i) => i !== index);
     setEditedData({
@@ -609,7 +659,7 @@ const SeekerProfile = () => {
   };
 
   // Education management functions
-  const updateEducation = (index: number, field: string, value: string) => {
+  const updateEducation = (index: number, field: string, value: string): void => {
     if (!editedData || !editedData.Education) return;
     const updatedEducation = [...editedData.Education];
     updatedEducation[index] = {
@@ -622,9 +672,9 @@ const SeekerProfile = () => {
     });
   };
 
-  const addEducation = () => {
+  const addEducation = (): void => {
     if (!editedData) return;
-    const newEducation = {
+    const newEducation: Education = {
       Degree: "",
       University: "",
       Year: ""
@@ -636,7 +686,7 @@ const SeekerProfile = () => {
     });
   };
 
-  const removeEducation = (index: number) => {
+  const removeEducation = (index: number): void => {
     if (!editedData || !editedData.Education) return;
     const updatedEducation = editedData.Education.filter((_, i) => i !== index);
     setEditedData({
@@ -644,6 +694,24 @@ const SeekerProfile = () => {
       Education: updatedEducation
     });
   };
+
+  // Effects
+  useEffect(() => {
+    if (userId) {
+      setClerkId(userId);
+      if (!isNew) {
+        fetchUserProfile();
+      } else {
+        initializeBasicProfile();
+      }
+    }
+  }, [userId, user, isNew]);
+
+  useEffect(() => {
+    if (parsedData) {
+      setEditedData({ ...parsedData });
+    }
+  }, [parsedData]);
 
   // Render functions
   const renderEditableSkills = () => {
@@ -838,8 +906,10 @@ const SeekerProfile = () => {
     );
   };
 
-  const isUploadDisabled = !selectedFile || !userId || isUploading || !CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET;
+  // Computed values
+  const isUploadDisabled = !selectedFile || !userId || isUploading || !UPLOADTHING_API_KEY || !UPLOADTHING_APP_ID;
 
+  // Loading state
   if (isLoadingProfile) {
     return (
       <SafeAreaView style={styles.container}>
@@ -880,16 +950,16 @@ const SeekerProfile = () => {
         </View>
 
         {/* Configuration Warning */}
-        {(!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) && (
+        {(!UPLOADTHING_API_KEY || !UPLOADTHING_APP_ID) && (
           <View style={styles.warningCard}>
             <View style={styles.warningHeader}>
               <Ionicons name="warning" size={20} color="#f59e0b" />
               <Text style={styles.warningTitle}>Configuration Required</Text>
             </View>
             <Text style={styles.warningText}>
-              Please configure your environment variables:
-              {'\n'}• EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME
-              {'\n'}• EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+              Please configure your UploadThing environment variables:
+              {'\n'}• EXPO_PUBLIC_UPLOADTHING_API_KEY
+              {'\n'}• EXPO_PUBLIC_UPLOADTHING_APP_ID
               {'\n'}• EXPO_PUBLIC_API_URL (required for production)
               {'\n'}
               {'\n'}Currently using: {getEnvironmentInfo().environment}
@@ -898,7 +968,7 @@ const SeekerProfile = () => {
           </View>
         )}
 
-        {/* Optional: Development Environment Info */}
+        {/* Development Environment Info */}
         {isUsingLocalhost() && (
           <View style={styles.infoCard}>
             <View style={styles.infoHeader}>
@@ -1065,7 +1135,7 @@ const SeekerProfile = () => {
                 renderEducationSection()
               )}
 
-              {/* Experience Section - Read Only Display */}
+              {/* Experience Section */}
               {parsedData.Experience && parsedData.Experience.length > 0 && (
                 <View style={styles.dataSection}>
                   <Text style={styles.sectionTitle}>Work Experience</Text>
@@ -1084,7 +1154,7 @@ const SeekerProfile = () => {
                 </View>
               )}
 
-              {/* Projects Section - Read Only Display */}
+              {/* Projects Section */}
               {parsedData.Projects && parsedData.Projects.length > 0 && (
                 <View style={styles.dataSection}>
                   <Text style={styles.sectionTitle}>Projects</Text>
@@ -1108,7 +1178,7 @@ const SeekerProfile = () => {
                 </View>
               )}
 
-              {/* Certifications Section - Read Only Display */}
+              {/* Certifications Section */}
               {parsedData.Certifications && parsedData.Certifications.length > 0 && (
                 <View style={styles.dataSection}>
                   <Text style={styles.sectionTitle}>Certifications</Text>
@@ -1286,7 +1356,7 @@ const SeekerProfile = () => {
           <View style={styles.uploadStatusContainer}>
             <View style={styles.statusItem}>
               <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
-              <Text style={styles.statusText}>Secure cloud storage with Cloudinary</Text>
+              <Text style={styles.statusText}>Secure file storage with UploadThing</Text>
             </View>
             <View style={styles.statusItem}>
               <Ionicons name="bulb-outline" size={16} color="#7c3aed" />
@@ -1309,6 +1379,7 @@ const SeekerProfile = () => {
 
 export default SeekerProfile;
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1470,7 +1541,265 @@ const styles = StyleSheet.create({
   cardHeaderActions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginLeft: 8,
+    flex: 1,
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  parsedDataContainer: {
+    // No maxHeight restriction
+  },
+  successIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  successText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#059669",
+    marginLeft: 8,
+  },
+  dataSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  infoContainer: {
+    gap: 6,
+  },
+  dataText: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  resumeLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  resumeLinkText: {
+    fontSize: 14,
+    color: "#2563eb",
+    fontWeight: "500",
+  },
+  skillsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
+  },
+  skillTag: {
+    backgroundColor: "#dbeafe",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  skillText: {
+    fontSize: 12,
+    color: "#1e40af",
+    fontWeight: "500",
+  },
+  educationList: {
+    gap: 12,
+  },
+  educationItem: {
+    padding: 12,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#2563eb",
+  },
+  educationDegree: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  educationUniversity: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 2,
+  },
+  educationYear: {
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  experienceList: {
+    gap: 16,
+  },
+  experienceItem: {
+    padding: 16,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#059669",
+  },
+  experienceRole: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  experienceCompany: {
+    fontSize: 14,
+    color: "#059669",
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  experienceDuration: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginBottom: 8,
+  },
+  experienceDescription: {
+    fontSize: 14,
+    color: "#374751",
+    lineHeight: 20,
+  },
+  projectsList: {
+    gap: 12,
+  },
+  projectItem: {
+    padding: 12,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#7c3aed",
+  },
+  projectName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  projectDescription: {
+    fontSize: 14,
+    color: "#6b7280",
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  technologiesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  technologyTag: {
+    backgroundColor: "#ede9fe",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  technologyText: {
+    fontSize: 10,
+    color: "#6d28d9",
+    fontWeight: "500",
+  },
+  certificationsList: {
+    gap: 8,
+  },
+  certificationItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#f0f9ff",
+    borderRadius: 8,
+    gap: 8,
+  },
+  certificationText: {
+    fontSize: 14,
+    color: "#374751",
+    flex: 1,
+  },
+  socialLinksContainer: {
+    gap: 8,
+  },
+  socialLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  socialLinkText: {
+    fontSize: 14,
+    color: "#374751",
+    flex: 1,
+    fontWeight: "500",
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#6b7280",
+    marginTop: 12,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: "#9ca3af",
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  uploadedFilesList: {
+    gap: 12,
+  },
+  uploadedFileItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  fileIcon: {
+    width: 40,
+    height: 40,
+    backgroundColor: "#dbeafe",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  fileDate: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  viewButton: {
+    padding: 8,
+    backgroundColor: "#dbeafe",
+    borderRadius: 6,
   },
   actionButton: {
     flexDirection: "row",
@@ -1508,20 +1837,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#374751",
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
-    marginLeft: 8,
-    flex: 1,
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
   editableSection: {
+    gap: 12,
+  },
+  inputRow: {
+    flexDirection: "row",
     gap: 12,
   },
   inputGroup: {
@@ -1542,6 +1862,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     fontSize: 14,
     color: "#111827",
+  },
+  checkboxContainer: {
+    marginTop: 8,
+  },
+  checkbox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: "#374751",
   },
   editableSkillsContainer: {
     gap: 8,
@@ -1735,267 +2067,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6b7280",
     flex: 1,
-  },
-  infoContainer: {
-    gap: 6,
-  },
-  parsedDataContainer: {
-    // Remove maxHeight to show all content
-  },
-  successIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  successText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#059669",
-    marginLeft: 8,
-  },
-  dataSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  dataText: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  skillsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  skillTag: {
-    backgroundColor: "#dbeafe",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  skillText: {
-    fontSize: 12,
-    color: "#1e40af",
-    fontWeight: "500",
-  },
-  educationList: {
-    gap: 12,
-  },
-  educationItem: {
-    padding: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#2563eb",
-  },
-  educationDegree: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 2,
-  },
-  educationUniversity: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 2,
-  },
-  educationYear: {
-    fontSize: 12,
-    color: "#9ca3af",
-  },
-  experienceList: {
-    gap: 16,
-  },
-  experienceItem: {
-    padding: 16,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#059669",
-  },
-  experienceRole: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  experienceCompany: {
-    fontSize: 14,
-    color: "#059669",
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  experienceDuration: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginBottom: 8,
-  },
-  experienceDescription: {
-    fontSize: 14,
-    color: "#374751",
-    lineHeight: 20,
-  },
-  projectsList: {
-    gap: 12,
-  },
-  projectItem: {
-    padding: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#7c3aed",
-  },
-  projectName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  projectDescription: {
-    fontSize: 14,
-    color: "#6b7280",
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  technologiesContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  technologyTag: {
-    backgroundColor: "#ede9fe",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  technologyText: {
-    fontSize: 10,
-    color: "#6d28d9",
-    fontWeight: "500",
-  },
-  certificationsList: {
-    gap: 8,
-  },
-  certificationItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#f0f9ff",
-    borderRadius: 8,
-    gap: 8,
-  },
-  certificationText: {
-    fontSize: 14,
-    color: "#374751",
-    flex: 1,
-  },
-  socialLinksContainer: {
-    gap: 8,
-  },
-  socialLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  socialLinkText: {
-    fontSize: 14,
-    color: "#374751",
-    flex: 1,
-    fontWeight: "500",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: "#6b7280",
-    marginTop: 12,
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginTop: 8,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  checkboxContainer: {
-    marginTop: 8,
-  },
-  checkbox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: "#374751",
-  },
-  resumeLinkButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-  },
-  resumeLinkText: {
-    fontSize: 14,
-    color: "#2563eb",
-    fontWeight: "500",
-  },
-  uploadedFilesList: {
-    gap: 12,
-  },
-  uploadedFileItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  fileIcon: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#dbeafe",
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  fileInfo: {
-    flex: 1,
-  },
-  fileName: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#111827",
-    marginBottom: 2,
-  },
-  fileDate: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  viewButton: {
-    padding: 8,
-    backgroundColor: "#dbeafe",
-    borderRadius: 6,
   },
 });

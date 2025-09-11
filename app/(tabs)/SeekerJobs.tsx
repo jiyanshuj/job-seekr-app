@@ -48,6 +48,12 @@ interface TrackingEvent {
   type: 'status_change' | 'communication' | 'interview' | 'follow_up' | 'offer';
 }
 
+interface SwipeLimitData {
+  date: string;
+  count: number;
+  resetTime: string;
+}
+
 // Static sample data
 const SAMPLE_APPLICATIONS: Application[] = [
   {
@@ -250,8 +256,82 @@ const ApplicationsIndex = () => {
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
+  // Swipe limit states
+  const [swipeLimitData, setSwipeLimitData] = useState<SwipeLimitData>({
+    date: new Date().toDateString(),
+    count: 0,
+    resetTime: getNextResetTime()
+  });
+  const [showLimitModal, setShowLimitModal] = useState(false);
+
+  // Helper function to get next reset time (24 hours from now)
+  function getNextResetTime(): string {
+    const tomorrow = new Date();
+    tomorrow.setHours(0, 0, 0, 0);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString();
+  }
+
+  // Helper function to check if reset is needed
+  const checkAndResetSwipeLimit = () => {
+    const today = new Date().toDateString();
+    const now = new Date();
+    const resetTime = new Date(swipeLimitData.resetTime);
+
+    if (today !== swipeLimitData.date || now >= resetTime) {
+      // Reset the counter for new day
+      setSwipeLimitData({
+        date: today,
+        count: 0,
+        resetTime: getNextResetTime()
+      });
+    }
+  };
+
+  // Helper function to format time remaining
+  const getTimeUntilReset = (): string => {
+    const now = new Date();
+    const resetTime = new Date(swipeLimitData.resetTime);
+    const timeDiff = resetTime.getTime() - now.getTime();
+    
+    if (timeDiff <= 0) return "Ready to reset";
+    
+    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  // Function to handle right swipe (job application)
+  const handleRightSwipe = (application: Application) => {
+    checkAndResetSwipeLimit();
+    
+    const currentCount = swipeLimitData.count;
+    const DAILY_LIMIT = 20;
+    
+    if (currentCount >= DAILY_LIMIT) {
+      // Show limit reached modal
+      setShowLimitModal(true);
+      return false;
+    }
+
+    // Increment swipe count
+    setSwipeLimitData(prev => ({
+      ...prev,
+      count: prev.count + 1
+    }));
+
+    // Proceed with application
+    handleApplicationPress(application);
+    return true;
+  };
+
   useEffect(() => {
     setLoading(true);
+    checkAndResetSwipeLimit();
     setTimeout(() => {
       fetchApplications();
     }, 1000);
@@ -287,6 +367,7 @@ const ApplicationsIndex = () => {
 
   const onRefresh = () => {
     setRefreshing(true);
+    checkAndResetSwipeLimit();
     fetchApplications();
   };
 
@@ -477,6 +558,104 @@ const ApplicationsIndex = () => {
     Alert.alert('Success', `Status updated to ${getStatusText(newStatus)}`);
   };
 
+  const renderSwipeLimitModal = () => (
+    <Modal
+      visible={showLimitModal}
+      animationType="fade"
+      transparent={true}
+    >
+      <View style={styles.limitModalOverlay}>
+        <View style={styles.limitModalContent}>
+          <View style={styles.limitModalHeader}>
+            <Ionicons name="time-outline" size={48} color="#ef4444" />
+            <Text style={styles.limitModalTitle}>Daily Application Limit Reached</Text>
+          </View>
+          
+          <View style={styles.limitModalBody}>
+            <Text style={styles.limitModalDescription}>
+              You've reached your daily limit of 20 job applications. This helps you focus on quality applications rather than quantity.
+            </Text>
+            
+            <View style={styles.limitStatsContainer}>
+              <View style={styles.limitStatItem}>
+                <Text style={styles.limitStatValue}>{swipeLimitData.count}/20</Text>
+                <Text style={styles.limitStatLabel}>Applications Today</Text>
+              </View>
+              <View style={styles.limitStatDivider} />
+              <View style={styles.limitStatItem}>
+                <Text style={styles.limitStatValue}>{getTimeUntilReset()}</Text>
+                <Text style={styles.limitStatLabel}>Until Reset</Text>
+              </View>
+            </View>
+
+            <View style={styles.limitTipsContainer}>
+              <Text style={styles.limitTipsTitle}>💡 While you wait:</Text>
+              <Text style={styles.limitTipItem}>• Review and update your existing applications</Text>
+              <Text style={styles.limitTipItem}>• Tailor your resume for tomorrow's applications</Text>
+              <Text style={styles.limitTipItem}>• Research companies you want to apply to</Text>
+              <Text style={styles.limitTipItem}>• Practice interview questions</Text>
+            </View>
+          </View>
+          
+          <TouchableOpacity
+            style={styles.limitModalButton}
+            onPress={() => setShowLimitModal(false)}
+          >
+            <Text style={styles.limitModalButtonText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderSwipeLimitIndicator = () => {
+    const DAILY_LIMIT = 20;
+    const remaining = DAILY_LIMIT - swipeLimitData.count;
+    const percentage = (swipeLimitData.count / DAILY_LIMIT) * 100;
+    
+    return (
+      <View style={styles.swipeLimitContainer}>
+        <View style={styles.swipeLimitHeader}>
+          <View style={styles.swipeLimitInfo}>
+            <Ionicons 
+              name={remaining > 0 ? "flash-outline" : "time-outline"} 
+              size={16} 
+              color={remaining > 0 ? "#10b981" : "#ef4444"} 
+            />
+            <Text style={[
+              styles.swipeLimitText, 
+              { color: remaining > 0 ? "#10b981" : "#ef4444" }
+            ]}>
+              {remaining > 0 ? `${remaining} applications left today` : 'Daily limit reached'}
+            </Text>
+          </View>
+          {remaining === 0 && (
+            <Text style={styles.resetTimeText}>
+              Resets in {getTimeUntilReset()}
+            </Text>
+          )}
+        </View>
+        
+        <View style={styles.swipeLimitProgressBar}>
+          <View 
+            style={[
+              styles.swipeLimitProgressFill, 
+              { 
+                width: `${percentage}%`,
+                backgroundColor: percentage >= 100 ? "#ef4444" : 
+                                percentage >= 80 ? "#f59e0b" : "#10b981"
+              }
+            ]} 
+          />
+        </View>
+        
+        <Text style={styles.swipeLimitCounter}>
+          {swipeLimitData.count} / {DAILY_LIMIT} applications today
+        </Text>
+      </View>
+    );
+  };
+
   const renderTableHeader = () => (
     <View style={styles.tableHeader}>
       <View style={styles.tableHeaderCell}>
@@ -500,7 +679,7 @@ const ApplicationsIndex = () => {
   const renderApplicationRow = ({ item }: { item: Application }) => (
     <TouchableOpacity 
       style={styles.tableRow}
-      onPress={() => handleApplicationPress(item)}
+      onPress={() => handleRightSwipe(item)}
       activeOpacity={0.7}
     >
       {/* Company & Position Column */}
@@ -833,6 +1012,9 @@ const ApplicationsIndex = () => {
 
   const renderHeader = () => (
     <View style={styles.header}>
+      {/* Swipe Limit Indicator */}
+      {renderSwipeLimitIndicator()}
+      
       <View style={styles.filtersRow}>
         {/* Type Filter with Dropdown */}
         <View style={styles.filterGroup}>
@@ -1005,6 +1187,7 @@ const ApplicationsIndex = () => {
       />
       {renderJobDetailsModal()}
       {renderTrackingModal()}
+      {renderSwipeLimitModal()}
     </SafeAreaView>
   );
 };
@@ -1039,6 +1222,160 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
+
+  // Swipe Limit Indicator Styles
+  swipeLimitContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+  swipeLimitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  swipeLimitInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  swipeLimitText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  resetTimeText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  swipeLimitProgressBar: {
+    height: 6,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  swipeLimitProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  swipeLimitCounter: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+
+  // Limit Modal Styles
+  limitModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  limitModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  limitModalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  limitModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  limitModalBody: {
+    marginBottom: 24,
+  },
+  limitModalDescription: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  limitStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  limitStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  limitStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 16,
+  },
+  limitStatValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    marginBottom: 4,
+  },
+  limitStatLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  limitTipsContainer: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+  },
+  limitTipsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+    marginBottom: 8,
+  },
+  limitTipItem: {
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  limitModalButton: {
+    backgroundColor: '#2563eb',
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  limitModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+
   filtersRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
