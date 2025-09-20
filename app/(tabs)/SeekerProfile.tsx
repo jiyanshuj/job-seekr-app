@@ -18,11 +18,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Configuration
-const UPLOADTHING_API_KEY = process.env.EXPO_PUBLIC_UPLOADTHING_API_KEY;
-const UPLOADTHING_APP_ID = process.env.EXPO_PUBLIC_UPLOADTHING_APP_ID;
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8000";
-const GOOGLE_API_KEY=process.env.GOOGLE_API_KEY
+// Configuration - Fixed to use correct environment variables
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 // Helper functions
 const isUsingLocalhost = (): boolean => {
@@ -67,24 +64,24 @@ interface ParsedResumeData {
   "Phone Number"?: string;
   Location?: string;
   "Willing to relocate"?: boolean;
-  
+
   // Professional Info
   Role?: string;
   "Company details"?: string;
   "Resume file"?: string;
   "Resume URL"?: string;
-  
+
   // Skills
   "Technical Skills"?: string[];
   "Soft Skills"?: string[];
   Skills?: string[];
-  
+
   // Experience & Education
   Experience?: Experience[];
   Education?: Education[];
   Certifications?: string[];
   Projects?: Project[];
-  
+
   // Social Links
   "LinkedIn Profile"?: string;
   "GitHub Profile"?: string;
@@ -114,7 +111,7 @@ const SeekerProfile: React.FC = () => {
   const [parsedData, setParsedData] = useState<ParsedResumeData | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-  
+
   // Editing state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editedData, setEditedData] = useState<ParsedResumeData | null>(null);
@@ -124,18 +121,6 @@ const SeekerProfile: React.FC = () => {
   // Utility functions
   const showAlert = (title: string, message: string): void => {
     Alert.alert(title, message);
-  };
-
-  const isProperlyConfigured = (): boolean => {
-    if (!UPLOADTHING_API_KEY || !UPLOADTHING_APP_ID) {
-      console.error("UploadThing configuration missing!");
-      showAlert(
-        "Configuration Error", 
-        "UploadThing configuration is missing. Please set up your environment variables."
-      );
-      return false;
-    }
-    return true;
   };
 
   const openResume = async (url: string): Promise<void> => {
@@ -187,7 +172,7 @@ const SeekerProfile: React.FC = () => {
         const profile = response.data;
         setUserProfile(profile);
         console.log("Profile data received:", profile);
-        
+
         if (profile.skills || profile.experience || profile.technical_skills || profile.soft_skills) {
           const formattedData: ParsedResumeData = {
             // Personal Info
@@ -198,23 +183,23 @@ const SeekerProfile: React.FC = () => {
             "Phone Number": profile.phone,
             Location: profile.location,
             "Willing to relocate": profile.willing_to_relocate,
-            
+
             // Professional Info
             Role: profile.role || "job_seeker",
             "Company details": profile.current_company,
             "Resume file": profile.resume_filename,
             "Resume URL": profile.resume_url,
-            
+
             // Skills
             "Technical Skills": profile.technical_skills?.length > 0 ? profile.technical_skills : null,
             "Soft Skills": profile.soft_skills?.length > 0 ? profile.soft_skills : null,
             Skills: profile.skills,
-            
+
             // Social Links
             "LinkedIn Profile": profile.social_links?.linkedin,
             "GitHub Profile": profile.social_links?.github,
             "Portfolio URL": profile.social_links?.portfolio,
-            
+
             // Experience, Education, etc.
             Experience: profile.experience?.map((exp: any) => ({
               Company: exp.company,
@@ -236,7 +221,7 @@ const SeekerProfile: React.FC = () => {
           };
           setParsedData(formattedData);
           setEditedData(formattedData);
-          
+
           if (profile.resume_url && profile.resume_filename) {
             setUploadedFiles([{
               url: profile.resume_url,
@@ -275,25 +260,25 @@ const SeekerProfile: React.FC = () => {
         phone: profileData["Phone Number"],
         location: profileData.Location,
         willing_to_relocate: profileData["Willing to relocate"],
-        
+
         // Professional Info
         role: profileData.Role,
         current_company: profileData["Company details"],
         resume_filename: profileData["Resume file"],
         resume_url: profileData["Resume URL"],
-        
+
         // Skills
         technical_skills: profileData["Technical Skills"],
         soft_skills: profileData["Soft Skills"],
         skills: profileData.Skills,
-        
+
         // Social Links
         social_links: {
           linkedin: profileData["LinkedIn Profile"],
           github: profileData["GitHub Profile"],
           portfolio: profileData["Portfolio URL"]
         },
-        
+
         // Experience, Education, etc.
         experience: profileData.Experience?.map(exp => ({
           company: exp.Company,
@@ -314,8 +299,9 @@ const SeekerProfile: React.FC = () => {
         }))
       };
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/users/update-profile`,
+      // Updated to use the correct backend endpoint
+      const response = await axios.patch(
+        `${API_BASE_URL}/api/users/${userId}`,
         updatedProfile,
         {
           headers: {
@@ -336,110 +322,7 @@ const SeekerProfile: React.FC = () => {
     }
   };
 
-  // File upload functions
-  const uploadToUploadThing = async (file: any): Promise<string> => {
-    try {
-      if (!isProperlyConfigured()) {
-        throw new Error("UploadThing not configured");
-      }
-
-      console.log('Starting UploadThing upload...');
-      console.log('File details:', {
-        name: file.name,
-        size: file.size,
-        mimeType: file.mimeType,
-        uri: file.uri
-      });
-
-      // Get presigned URL from UploadThing
-      const presignedResponse = await fetch(`https://api.uploadthing.com/v6/uploadFiles`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Uploadthing-Api-Key": UPLOADTHING_API_KEY!,
-          "X-Uploadthing-Version": "6.13.2",
-        },
-        body: JSON.stringify({
-          files: [{
-            name: file.name,
-            size: file.size,
-            type: file.mimeType || "application/pdf",
-          }],
-          metadata: {
-            userId: userId || 'anonymous',
-            uploadDate: new Date().toISOString(),
-            fileType: 'resume',
-            category: 'jobswipe'
-          },
-          contentDisposition: "inline"
-        }),
-      });
-
-      if (!presignedResponse.ok) {
-        const errorText = await presignedResponse.text();
-        console.error('UploadThing presigned URL error:', errorText);
-        throw new Error(`Failed to get upload URL: ${presignedResponse.status}`);
-      }
-
-      const presignedData = await presignedResponse.json();
-      console.log('Presigned URL response:', presignedData);
-
-      if (!presignedData.data || presignedData.data.length === 0) {
-        throw new Error("No presigned URL received from UploadThing");
-      }
-
-      const uploadData = presignedData.data[0];
-      const { url: presignedUrl, fields } = uploadData;
-
-      // Upload file using presigned URL
-      const uploadFormData = new FormData();
-      
-      Object.keys(fields).forEach(key => {
-        uploadFormData.append(key, fields[key]);
-      });
-
-      uploadFormData.append("file", {
-        uri: file.uri,
-        type: file.mimeType || "application/pdf",
-        name: file.name,
-      } as any);
-
-      const uploadResponse = await fetch(presignedUrl, {
-        method: "POST",
-        body: uploadFormData,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error('UploadThing file upload error:', errorText);
-        throw new Error(`File upload failed: ${uploadResponse.status}`);
-      }
-
-      const fileUrl = `https://utfs.io/f/${uploadData.key}`;
-      console.log('UploadThing upload successful:', fileUrl);
-      return fileUrl;
-
-    } catch (error: any) {
-      console.error("UploadThing upload error:", error);
-      
-      let errorMessage = "Failed to upload to UploadThing";
-      
-      if (error.message?.includes('unauthorized') || error.message?.includes('401')) {
-        errorMessage = "UploadThing API key configuration error. Please check your credentials.";
-      } else if (error.message?.includes('network') || error.message?.includes('Network')) {
-        errorMessage = "Network error. Please check your internet connection.";
-      } else if (error.message?.includes('timeout')) {
-        errorMessage = "Upload timeout. Please try again.";
-      } else if (error.message?.includes('file size') || error.message?.includes('too large')) {
-        errorMessage = "File is too large. Please select a smaller file.";
-      } else if (error.message && error.message !== "Failed to upload to UploadThing") {
-        errorMessage = error.message;
-      }
-      
-      throw new Error(errorMessage);
-    }
-  };
-
+  // File upload functions - SIMPLIFIED to work with backend
   const pickDocument = async (): Promise<void> => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -473,111 +356,93 @@ const SeekerProfile: React.FC = () => {
       return;
     }
 
-    if (!isProperlyConfigured()) {
+    // Validate file before upload
+    if (selectedFile.size && selectedFile.size > 5 * 1024 * 1024) {
+      showAlert("File too large", "Please select a file smaller than 5MB");
       return;
     }
 
     setIsUploading(true);
 
     try {
-      // Step 1: Upload to UploadThing first
-      console.log("Step 1: Uploading to UploadThing...");
-      const uploadThingUrl = await uploadToUploadThing(selectedFile);
-      console.log("UploadThing URL:", uploadThingUrl);
-
-      // Step 2: Send file to backend for parsing with UploadThing URL
-      console.log("Step 2: Sending file to backend for parsing...");
       const formData = new FormData();
+      formData.append("clerk_id", clerkId);
+      formData.append("user_role", "job_seeker"); // FIX: Use actual userRole
+
+      // For React Native, we need to append the file differently
       formData.append("file", {
         uri: selectedFile.uri,
         type: selectedFile.mimeType || "application/pdf",
         name: selectedFile.name,
       } as any);
-      formData.append("clerk_id", clerkId);
-      formData.append("user_role", "job_seeker");
-      formData.append("resume_url", uploadThingUrl);
-      formData.append("resume_filename", selectedFile.name);
-      
-      // Add API key if available (for backend parsing services)
-      if (UPLOADTHING_API_KEY) {
-        formData.append("api_key", UPLOADTHING_API_KEY);
-      }
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/users/upload`,
-        {
-          method: "POST",
-          body: formData,
-          headers: {
-            // Try different API key configurations in headers
-            ...(GOOGLE_API_KEY && {
-              'X-API-Key': GOOGLE_API_KEY,
-              'Authorization': `Bearer ${GOOGLE_API_KEY}`,
-              'Google-API-Key': GOOGLE_API_KEY,
-              'api-key': GOOGLE_API_KEY
-            }),
-            ...(UPLOADTHING_API_KEY && !GOOGLE_API_KEY && {
-              'X-API-Key': UPLOADTHING_API_KEY,
-              'Authorization': `Bearer ${UPLOADTHING_API_KEY}`,
-              'UploadThing-API-Key': UPLOADTHING_API_KEY,
-              'api-key': UPLOADTHING_API_KEY
-            }),
-            Accept: "application/json",
-          },
+      const uploadUrl = `${API_BASE_URL}/api/users/upload`;
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+        headers: {
+          // Don't set Content-Type - let browser handle it
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
         }
-      );
+        throw new Error(errorData.detail || errorData.message || `Upload failed`);
+      }
 
       const data = await response.json();
-      if (!response.ok) {
-        console.error("Backend parsing error:", data);
-        throw new Error(data.detail || data.message || "Backend parsing failed");
+
+      // Validate response structure
+      if (!data.result) {
+        throw new Error("Invalid response: missing parsed data");
       }
 
-      // Handle parsed data from backend
-      if (data) {
-        // Update parsed data with UploadThing URL
-        const updatedData = {
-          ...data,
-          "Resume URL": uploadThingUrl,
-          "Resume file": selectedFile.name
-        };
-        
-        setParsedData(updatedData);
-        setEditedData(updatedData);
-        console.log("Parsed data from backend:", updatedData);
-        
-        // Add to uploaded files list
-        const newUploadedFile: UploadedFile = {
-          url: uploadThingUrl,
+      // Handle successful upload
+      const updatedData = {
+        ...data.result,
+        "Resume file": selectedFile.name,
+        "Resume URL": data.uploadthing_url
+      };
+
+      setParsedData(updatedData);
+      setEditedData(updatedData);
+
+      if (data.uploadthing_url) {
+        const newFile: UploadedFile = {
+          url: data.uploadthing_url,
           name: selectedFile.name,
-          uploadDate: new Date().toLocaleString()
+          uploadDate: new Date().toISOString()
         };
-        setUploadedFiles(prev => [newUploadedFile, ...prev]);
+        setUploadedFiles(prev => [...prev, newFile]);
       }
 
-      // Refresh user profile
       await fetchUserProfile();
-      
-      showAlert("Success", "Resume uploaded to cloud storage and parsed successfully!");
+      showAlert("Success", "Resume uploaded and parsed successfully!");
       setSelectedFile(null);
-      
+
     } catch (error: any) {
-      console.error("Upload/Parse error:", error);
-      
+      console.error("Upload error:", error);
+
+      // Better error categorization
       let errorMessage = "Failed to process resume";
-      
-      if (error.message?.includes("Must supply api_key")) {
-        errorMessage = "Backend API key configuration error. Please check your server configuration.";
-      } else if (error.message?.includes("UploadThing")) {
-        errorMessage = "Failed to upload file to cloud storage. " + error.message;
-      } else if (error.message?.includes("Backend") || error.message?.includes("parsing")) {
-        errorMessage = "File uploaded successfully but parsing failed. " + error.message;
-      } else if (error.message?.includes("Network") || error.message?.includes("fetch")) {
-        errorMessage = "Network error. Please check your connection and try again.";
+
+      if (error.message?.includes("Network") || !navigator.onLine) {
+        errorMessage = "Network error. Please check your connection.";
+      } else if (error.message?.includes("timeout")) {
+        errorMessage = "Upload timeout. Please try a smaller file.";
+      } else if (error.message?.includes("Invalid response")) {
+        errorMessage = "Server processing error. Please try again.";
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       showAlert("Upload Error", errorMessage);
     } finally {
       setIsUploading(false);
@@ -716,7 +581,7 @@ const SeekerProfile: React.FC = () => {
   // Render functions
   const renderEditableSkills = () => {
     if (!editedData?.Skills) return null;
-    
+
     return (
       <View style={styles.editableSkillsContainer}>
         {editedData.Skills.map((skill, index) => (
@@ -745,7 +610,7 @@ const SeekerProfile: React.FC = () => {
 
   const renderEditableEducation = () => {
     if (!editedData?.Education) return null;
-    
+
     return (
       <View style={styles.editableEducationContainer}>
         {editedData.Education.map((education, index) => (
@@ -907,7 +772,7 @@ const SeekerProfile: React.FC = () => {
   };
 
   // Computed values
-  const isUploadDisabled = !selectedFile || !userId || isUploading || !UPLOADTHING_API_KEY || !UPLOADTHING_APP_ID;
+  const isUploadDisabled = !selectedFile || !userId || isUploading;
 
   // Loading state
   if (isLoadingProfile) {
@@ -949,25 +814,6 @@ const SeekerProfile: React.FC = () => {
           </View>
         </View>
 
-        {/* Configuration Warning */}
-        {(!UPLOADTHING_API_KEY || !UPLOADTHING_APP_ID) && (
-          <View style={styles.warningCard}>
-            <View style={styles.warningHeader}>
-              <Ionicons name="warning" size={20} color="#f59e0b" />
-              <Text style={styles.warningTitle}>Configuration Required</Text>
-            </View>
-            <Text style={styles.warningText}>
-              Please configure your UploadThing environment variables:
-              {'\n'}• EXPO_PUBLIC_UPLOADTHING_API_KEY
-              {'\n'}• EXPO_PUBLIC_UPLOADTHING_APP_ID
-              {'\n'}• EXPO_PUBLIC_API_URL (required for production)
-              {'\n'}
-              {'\n'}Currently using: {getEnvironmentInfo().environment}
-              {'\n'}API Endpoint: {API_BASE_URL}
-            </Text>
-          </View>
-        )}
-
         {/* Development Environment Info */}
         {isUsingLocalhost() && (
           <View style={styles.infoCard}>
@@ -976,7 +822,8 @@ const SeekerProfile: React.FC = () => {
               <Text style={styles.infoTitle}>Development Mode</Text>
             </View>
             <Text style={styles.infoText}>
-              You're currently using localhost. For production deployment, set EXPO_PUBLIC_API_URL to your production server URL.
+              Using backend at: {API_BASE_URL}
+              {'\n'}For production, set EXPO_PUBLIC_API_URL environment variable.
             </Text>
           </View>
         )}
@@ -1025,8 +872,8 @@ const SeekerProfile: React.FC = () => {
             )}
           </View>
           <Text style={styles.cardDescription}>
-            {parsedData 
-              ? "Your professional information parsed from your resume" 
+            {parsedData
+              ? "Your professional information parsed from your resume"
               : "Upload a resume to automatically extract and build your professional profile"
             }
           </Text>
@@ -1081,7 +928,7 @@ const SeekerProfile: React.FC = () => {
                   <View style={styles.infoContainer}>
                     <Text style={styles.dataText}>File: {parsedData["Resume file"]}</Text>
                     {parsedData["Resume URL"] && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => openResume(parsedData["Resume URL"]!)}
                         style={styles.resumeLinkButton}
                       >
@@ -1199,7 +1046,7 @@ const SeekerProfile: React.FC = () => {
                   <Text style={styles.sectionTitle}>Professional Links</Text>
                   <View style={styles.socialLinksContainer}>
                     {parsedData["LinkedIn Profile"] && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => openResume(parsedData["LinkedIn Profile"]!)}
                         style={styles.socialLink}
                       >
@@ -1209,7 +1056,7 @@ const SeekerProfile: React.FC = () => {
                       </TouchableOpacity>
                     )}
                     {parsedData["GitHub Profile"] && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => openResume(parsedData["GitHub Profile"]!)}
                         style={styles.socialLink}
                       >
@@ -1219,7 +1066,7 @@ const SeekerProfile: React.FC = () => {
                       </TouchableOpacity>
                     )}
                     {parsedData["Portfolio URL"] && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => openResume(parsedData["Portfolio URL"]!)}
                         style={styles.socialLink}
                       >
@@ -1244,7 +1091,7 @@ const SeekerProfile: React.FC = () => {
                 Upload a resume below to automatically extract your professional information
               </Text>
               <Text style={styles.emptyStateSubtext}>
-                Our AI will parse your resume and populate your profile with skills, education, experience, and more
+                Backend will handle UploadThing upload and AI parsing automatically
               </Text>
             </View>
           )}
@@ -1265,9 +1112,9 @@ const SeekerProfile: React.FC = () => {
                   </View>
                   <View style={styles.fileInfo}>
                     <Text style={styles.fileName}>{file.name}</Text>
-                    <Text style={styles.fileDate}>Uploaded: {file.uploadDate}</Text>
+                    <Text style={styles.fileDate}>Uploaded: {new Date(file.uploadDate).toLocaleDateString()}</Text>
                   </View>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => openResume(file.url)}
                     style={styles.viewButton}
                   >
@@ -1290,7 +1137,7 @@ const SeekerProfile: React.FC = () => {
           <Text style={styles.cardDescription}>
             {parsedData?.["Resume file"]
               ? "Upload a new resume file to update your profile with latest information"
-              : "Select your resume file to upload to secure cloud storage and extract professional data"
+              : "Select your resume file - backend will handle UploadThing upload and AI parsing automatically"
             }
           </Text>
 
@@ -1356,7 +1203,7 @@ const SeekerProfile: React.FC = () => {
           <View style={styles.uploadStatusContainer}>
             <View style={styles.statusItem}>
               <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
-              <Text style={styles.statusText}>Secure file storage with UploadThing</Text>
+              <Text style={styles.statusText}>Backend handles UploadThing upload automatically</Text>
             </View>
             <View style={styles.statusItem}>
               <Ionicons name="bulb-outline" size={16} color="#7c3aed" />
@@ -1368,7 +1215,7 @@ const SeekerProfile: React.FC = () => {
             </View>
             <View style={styles.statusItem}>
               <Ionicons name="lock-closed-outline" size={16} color="#7c3aed" />
-              <Text style={styles.statusText}>Your files are encrypted and private</Text>
+              <Text style={styles.statusText}>Your files are encrypted and secure</Text>
             </View>
           </View>
         </View>
@@ -1379,7 +1226,7 @@ const SeekerProfile: React.FC = () => {
 
 export default SeekerProfile;
 
-// Styles
+// Styles remain the same as in your original code
 const styles = StyleSheet.create({
   container: {
     flex: 1,

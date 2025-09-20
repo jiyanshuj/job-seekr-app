@@ -52,13 +52,13 @@ export default function SeekerJobs() {
   const [error, setError] = useState<string | null>(null);
   const [applications, setApplications] = useState<any[]>([]);
   const [showOverlay, setShowOverlay] = useState(true);
-  
+
   const [selectedLocation, setSelectedLocation] = useState<string>('All Locations');
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [allJobs, setAllJobs] = useState<Job[]>([]);
   const [userLocation, setUserLocation] = useState<string>('');
   const [isLocationLoading, setIsLocationLoading] = useState(false);
-  
+
   const locations = [
     'All Locations',
     'Live Location',
@@ -246,17 +246,17 @@ export default function SeekerJobs() {
 
   const filterJobsByLocation = (location: string, jobsToFilter?: Job[], userLoc?: string) => {
     const jobsData = jobsToFilter || allJobs;
-    
+
     if (location === 'All Locations') {
       setJobs(jobsData);
     } else if (location === 'Live Location' && userLoc) {
-      const filteredJobs = jobsData.filter(job => 
+      const filteredJobs = jobsData.filter(job =>
         job.location.toLowerCase().includes(userLoc.toLowerCase()) ||
         job.location.toLowerCase().includes('remote')
       );
       setJobs(filteredJobs);
     } else {
-      const filteredJobs = jobsData.filter(job => 
+      const filteredJobs = jobsData.filter(job =>
         job.location.toLowerCase().includes(location.toLowerCase()) ||
         (location === 'Remote' && job.location.toLowerCase().includes('remote'))
       );
@@ -269,9 +269,9 @@ export default function SeekerJobs() {
       overlayOpacity.value = 1;
       leftArrowTranslateX.value = 0;
       rightArrowTranslateX.value = 0;
-      
+
       startOverlayAnimation();
-      
+
       const timer = setTimeout(() => {
         hideOverlay();
       }, 3000);
@@ -283,7 +283,7 @@ export default function SeekerJobs() {
   const startOverlayAnimation = () => {
     leftTutorialOpacity.value = withTiming(0.4, { duration: 300 });
     rightTutorialOpacity.value = withTiming(0.4, { duration: 300 });
-    
+
     const animateArrows = () => {
       leftArrowTranslateX.value = withSequence(
         withTiming(-40, { duration: 600 }),
@@ -296,9 +296,9 @@ export default function SeekerJobs() {
     };
 
     animateArrows();
-    
+
     const intervalId = setInterval(animateArrows, 1200);
-    
+
     setTimeout(() => {
       clearInterval(intervalId);
     }, 2500);
@@ -338,11 +338,11 @@ export default function SeekerJobs() {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       setApplications(fallbackJobsData);
       setAllJobs(fallbackJobsData);
       filterJobsByLocation('All Locations', fallbackJobsData);
-      
+
     } catch (err) {
       console.error('Error fetching applications:', err);
       setError('Failed to load job applications. Please check your internet connection or try again later.');
@@ -357,7 +357,7 @@ export default function SeekerJobs() {
   const fetchLiveLocation = async () => {
     try {
       setIsLocationLoading(true);
-      
+
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Location permission is required to find jobs near you');
@@ -370,7 +370,7 @@ export default function SeekerJobs() {
       });
 
       const { latitude, longitude } = location.coords;
-      
+
       try {
         const reverseGeocodeResult = await Location.reverseGeocodeAsync({
           latitude,
@@ -382,15 +382,15 @@ export default function SeekerJobs() {
           const city = result.city || result.subregion || 'Unknown City';
           const region = result.region || result.country || '';
           const locationString = region ? `${city}, ${region}` : city;
-          
+
           setUserLocation(locationString);
           setSelectedLocation('Live Location');
           setShowLocationModal(false);
-          
+
           filterJobsByLocation('Live Location', allJobs, locationString);
-          
+
           Alert.alert(
-            'Location Found! 📍', 
+            'Location Found! 📍',
             `Jobs filtered for: ${locationString}`,
             [{ text: 'Great!', style: 'default' }]
           );
@@ -404,9 +404,9 @@ export default function SeekerJobs() {
         setSelectedLocation('Live Location');
         setShowLocationModal(false);
         filterJobsByLocation('Live Location', allJobs, locationString);
-        
+
         Alert.alert(
-          'Location Found! 📍', 
+          'Location Found! 📍',
           `Jobs filtered for your location`,
           [{ text: 'Great!', style: 'default' }]
         );
@@ -414,7 +414,7 @@ export default function SeekerJobs() {
     } catch (error: any) {
       console.error('Location error:', error);
       let errorMessage = 'Unable to get your location. ';
-      
+
       if (error.code) {
         switch (error.code) {
           case 'E_LOCATION_PERMISSION_DENIED':
@@ -431,7 +431,7 @@ export default function SeekerJobs() {
             break;
         }
       }
-      
+
       Alert.alert('Location Error', 'Unable to get your location. Please check your permissions and try again.');
     } finally {
       setIsLocationLoading(false);
@@ -459,9 +459,9 @@ export default function SeekerJobs() {
   const handleSwipeLeft = (job: Job) => {
     if (isAnimating) return;
     setIsAnimating(true);
-    
+
     triggerHalfScreenAnimation('left');
-    
+
     setTimeout(() => {
       setJobs((prev) => prev.slice(1));
       setSwipedJobs((prev) => [...prev, { job, action: "rejected" }]);
@@ -472,9 +472,9 @@ export default function SeekerJobs() {
   const handleSwipeRight = (job: Job) => {
     if (isAnimating) return;
     setIsAnimating(true);
-    
+
     triggerHalfScreenAnimation('right');
-    
+
     setTimeout(() => {
       setJobs((prev) => prev.slice(1));
       setSwipedJobs((prev) => [...prev, { job, action: "liked" }]);
@@ -487,7 +487,7 @@ export default function SeekerJobs() {
 
   const handleBookmark = (job: Job) => {
     const isCurrentlySaved = savedJobs.has(job.id);
-    
+
     if (isCurrentlySaved) {
       setSavedJobs(prev => {
         const newSet = new Set(prev);
@@ -565,209 +565,209 @@ export default function SeekerJobs() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}>
-      {/* Location Selector - Moved and positioned better */}
-      <View style={styles.locationContainer}>
-        <TouchableOpacity 
-          style={styles.locationSelector} 
-          onPress={() => setShowLocationModal(true)}
-        >
-          <Ionicons name="location-outline" size={14} color="#6b7280" />
-          <Text style={styles.locationText} numberOfLines={1}>
-            {selectedLocation}
-          </Text>
-          <Ionicons name="chevron-down" size={14} color="#6b7280" />
-        </TouchableOpacity>
-      </View>
-      
-      {/* REMOVED: Header with "Industrial Jobs" text - completely removed this section */}
-      
-      {/* MODIFIED: Card container with adjusted positioning - moved higher */}
-      <View style={styles.cardContainer}>
-        {jobs && jobs.length > 0 ? (
-          <>
-            {jobs.length > 1 && (
-              <View style={[styles.card, styles.backgroundCard]}>
-                <JobCardContent job={jobs[1]} />
+        {/* Location Selector - Moved and positioned better */}
+        <View style={styles.locationContainer}>
+          <TouchableOpacity
+            style={styles.locationSelector}
+            onPress={() => setShowLocationModal(true)}
+          >
+            <Ionicons name="location-outline" size={14} color="#6b7280" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {selectedLocation}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
+
+        {/* REMOVED: Header with "Industrial Jobs" text - completely removed this section */}
+
+        {/* MODIFIED: Card container with adjusted positioning - moved higher */}
+        <View style={styles.cardContainer}>
+          {jobs && jobs.length > 0 ? (
+            <>
+              {jobs.length > 1 && (
+                <View style={[styles.card, styles.backgroundCard]}>
+                  <JobCardContent job={jobs[1]} />
+                </View>
+              )}
+              <JobSwipeCard
+                key={jobs[0]?.id || 'fallback-0'}
+                job={jobs[0]}
+                isTop={true}
+                isSaved={savedJobs.has(jobs[0]?.id || '')}
+                onSwipeLeft={() => handleSwipeLeft(jobs[0])}
+                onSwipeRight={() => handleSwipeRight(jobs[0])}
+                onBookmark={() => handleBookmark(jobs[0])}
+                onSwipeAnimation={triggerHalfScreenAnimation}
+              />
+            </>
+          ) : (
+            <View style={styles.noJobsContainer}>
+              <Text style={styles.noJobsEmoji}>
+                {selectedLocation === 'All Locations' ? '🎉' : '📍'}
+              </Text>
+              <Text style={styles.noJobsTitle}>
+                {selectedLocation === 'All Locations' ? 'All done!' : 'No jobs found'}
+              </Text>
+              <Text style={styles.noJobsSubtitle}>
+                {selectedLocation === 'All Locations'
+                  ? "You've reviewed all available positions"
+                  : selectedLocation === 'Live Location' && userLocation
+                    ? `No jobs available in ${userLocation} right now`
+                    : `No jobs available in ${selectedLocation} right now`}
+              </Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={resetJobs}>
+                <Text style={styles.primaryButtonText}>
+                  {selectedLocation === 'All Locations' ? 'Start Over' : 'Reset & Try Again'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Show info messages and reset button at bottom */}
+        {(selectedLocation !== 'All Locations' || error || swipedJobs.length > 0) && (
+          <View style={styles.bottomInfo}>
+            {selectedLocation !== 'All Locations' && (
+              <Text style={styles.jobCount}>
+                {jobs.length} job{jobs.length !== 1 ? 's' : ''} in {
+                  selectedLocation === 'Live Location' && userLocation
+                    ? userLocation
+                    : selectedLocation
+                }
+              </Text>
+            )}
+
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={retryFetch}>
+                  <Ionicons name="refresh-outline" size={14} color="#3b82f6" />
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
               </View>
             )}
-            <JobSwipeCard
-              key={jobs[0]?.id || 'fallback-0'}
-              job={jobs[0]}
-              isTop={true}
-              isSaved={savedJobs.has(jobs[0]?.id || '')}
-              onSwipeLeft={() => handleSwipeLeft(jobs[0])}
-              onSwipeRight={() => handleSwipeRight(jobs[0])}
-              onBookmark={() => handleBookmark(jobs[0])}
-              onSwipeAnimation={triggerHalfScreenAnimation}
-            />
-          </>
-        ) : (
-          <View style={styles.noJobsContainer}>
-            <Text style={styles.noJobsEmoji}>
-              {selectedLocation === 'All Locations' ? '🎉' : '📍'}
-            </Text>
-            <Text style={styles.noJobsTitle}>
-              {selectedLocation === 'All Locations' ? 'All done!' : 'No jobs found'}
-            </Text>
-            <Text style={styles.noJobsSubtitle}>
-              {selectedLocation === 'All Locations' 
-                ? "You've reviewed all available positions" 
-                : selectedLocation === 'Live Location' && userLocation
-                ? `No jobs available in ${userLocation} right now`
-                : `No jobs available in ${selectedLocation} right now`}
-            </Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={resetJobs}>
-              <Text style={styles.primaryButtonText}>
-                {selectedLocation === 'All Locations' ? 'Start Over' : 'Reset & Try Again'}
-              </Text>
-            </TouchableOpacity>
+
+            {swipedJobs.length > 0 && (
+              <TouchableOpacity style={styles.resetButton} onPress={resetJobs}>
+                <Ionicons name="refresh-outline" size={14} color="#fff" />
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
-      </View>
 
-      {/* Show info messages and reset button at bottom */}
-      {(selectedLocation !== 'All Locations' || error || swipedJobs.length > 0) && (
-        <View style={styles.bottomInfo}>
-          {selectedLocation !== 'All Locations' && (
-            <Text style={styles.jobCount}>
-              {jobs.length} job{jobs.length !== 1 ? 's' : ''} in {
-                selectedLocation === 'Live Location' && userLocation 
-                  ? userLocation 
-                  : selectedLocation
-              }
-            </Text>
-          )}
-          
-          {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={retryFetch}>
-                <Ionicons name="refresh-outline" size={14} color="#3b82f6" />
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {swipedJobs.length > 0 && (
-            <TouchableOpacity style={styles.resetButton} onPress={resetJobs}>
-              <Ionicons name="refresh-outline" size={14} color="#fff" />
-              <Text style={styles.resetButtonText}>Reset</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* Location Modal */}
-      {showLocationModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.locationModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Location</Text>
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={() => setShowLocationModal(false)}
-              >
-                <Ionicons name="close" size={20} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.locationList} showsVerticalScrollIndicator={false}>
-              {locations.map((location, index) => (
+        {/* Location Modal */}
+        {showLocationModal && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.locationModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Location</Text>
                 <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.locationItem,
-                    selectedLocation === location && styles.selectedLocationItem,
-                    location === 'Live Location' && isLocationLoading && styles.loadingLocationItem
-                  ]}
-                  onPress={() => handleLocationSelect(location)}
-                  disabled={location === 'Live Location' && isLocationLoading}
+                  style={styles.closeButton}
+                  onPress={() => setShowLocationModal(false)}
                 >
-                  {location === 'Live Location' && isLocationLoading ? (
-                    <Text style={styles.loadingText}>📍</Text>
-                  ) : (
-                    <Ionicons 
-                      name={location === 'Live Location' ? 'locate-outline' : location === 'Remote' ? 'laptop-outline' : 'location-outline'} 
-                      size={18} 
-                      color={selectedLocation === location ? '#3b82f6' : '#6b7280'} 
-                    />
-                  )}
-                  <Text style={[
-                    styles.locationItemText,
-                    selectedLocation === location && styles.selectedLocationText,
-                    location === 'Live Location' && isLocationLoading && styles.loadingLocationText
-                  ]}>
-                    {location === 'Live Location' && userLocation && selectedLocation === 'Live Location'
-                      ? `Live Location (${userLocation})`
-                      : location === 'Live Location' && isLocationLoading
-                      ? 'Getting your location...'
-                      : location}
-                  </Text>
-                  {selectedLocation === location && (
-                    <Ionicons name="checkmark" size={18} color="#3b82f6" />
-                  )}
+                  <Ionicons name="close" size={20} color="#6b7280" />
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </View>
+              <ScrollView style={styles.locationList} showsVerticalScrollIndicator={false}>
+                {locations.map((location, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.locationItem,
+                      selectedLocation === location && styles.selectedLocationItem,
+                      location === 'Live Location' && isLocationLoading && styles.loadingLocationItem
+                    ]}
+                    onPress={() => handleLocationSelect(location)}
+                    disabled={location === 'Live Location' && isLocationLoading}
+                  >
+                    {location === 'Live Location' && isLocationLoading ? (
+                      <Text style={styles.loadingText}>📍</Text>
+                    ) : (
+                      <Ionicons
+                        name={location === 'Live Location' ? 'locate-outline' : location === 'Remote' ? 'laptop-outline' : 'location-outline'}
+                        size={18}
+                        color={selectedLocation === location ? '#3b82f6' : '#6b7280'}
+                      />
+                    )}
+                    <Text style={[
+                      styles.locationItemText,
+                      selectedLocation === location && styles.selectedLocationText,
+                      location === 'Live Location' && isLocationLoading && styles.loadingLocationText
+                    ]}>
+                      {location === 'Live Location' && userLocation && selectedLocation === 'Live Location'
+                        ? `Live Location (${userLocation})`
+                        : location === 'Live Location' && isLocationLoading
+                          ? 'Getting your location...'
+                          : location}
+                    </Text>
+                    {selectedLocation === location && (
+                      <Ionicons name="checkmark" size={18} color="#3b82f6" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Half-screen animation overlays */}
-      <Animated.View style={[styles.halfScreenOverlay, styles.leftHalfScreen, leftScreenAnimatedStyle]}>
-        <View style={styles.halfScreenContent}>
-          <Ionicons name="close-circle" size={80} color="#fff" />
-          <Text style={styles.halfScreenText}>REJECT</Text>
-        </View>
-      </Animated.View>
-
-      <Animated.View style={[styles.halfScreenOverlay, styles.rightHalfScreen, rightScreenAnimatedStyle]}>
-        <View style={styles.halfScreenContent}>
-          <Ionicons name="checkmark-circle" size={80} color="#fff" />
-          <Text style={styles.halfScreenText}>ACCEPT</Text>
-        </View>
-      </Animated.View>
-
-      {/* Tutorial Overlay */}
-      {showOverlay && (
-        <TouchableOpacity 
-          activeOpacity={1} 
-          onPress={hideOverlay}
-          style={[styles.tutorialOverlay, overlayAnimatedStyle]}
-        >
-          <Animated.View style={[styles.tutorialHalfScreen, styles.leftTutorialHalf, leftTutorialAnimatedStyle]} />
-          <Animated.View style={[styles.tutorialHalfScreen, styles.rightTutorialHalf, rightTutorialAnimatedStyle]} />
-          
-          <View style={styles.tutorialContent}>
-            <Animated.View style={[styles.arrowContainer, styles.leftArrow, leftArrowAnimatedStyle]}>
-              <Ionicons name="close-circle" size={60} color="#fff" />
-              <Text style={styles.arrowLabel}>REJECT</Text>
-            </Animated.View>
-
-            <Animated.View style={[styles.arrowContainer, styles.rightArrow, rightArrowAnimatedStyle]}>
-              <Ionicons name="checkmark-circle" size={60} color="#fff" />
-              <Text style={styles.arrowLabel}>ACCEPT</Text>
-            </Animated.View>
-
-            <Animated.View style={[styles.instructionContainer, textAnimatedStyle]}>
-              <Text style={styles.instructionText}>Swipe right to accept • Swipe left to reject</Text>
-              <Text style={styles.instructionSubtext}>Tap to dismiss tutorial</Text>
-            </Animated.View>
+        {/* Half-screen animation overlays */}
+        <Animated.View style={[styles.halfScreenOverlay, styles.leftHalfScreen, leftScreenAnimatedStyle]}>
+          <View style={styles.halfScreenContent}>
+            <Ionicons name="close-circle" size={80} color="#fff" />
+            <Text style={styles.halfScreenText}>REJECT</Text>
           </View>
-        </TouchableOpacity>
-      )}
+        </Animated.View>
+
+        <Animated.View style={[styles.halfScreenOverlay, styles.rightHalfScreen, rightScreenAnimatedStyle]}>
+          <View style={styles.halfScreenContent}>
+            <Ionicons name="checkmark-circle" size={80} color="#fff" />
+            <Text style={styles.halfScreenText}>ACCEPT</Text>
+          </View>
+        </Animated.View>
+
+        {/* Tutorial Overlay */}
+        {showOverlay && (
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={hideOverlay}
+            style={[styles.tutorialOverlay, overlayAnimatedStyle]}
+          >
+            <Animated.View style={[styles.tutorialHalfScreen, styles.leftTutorialHalf, leftTutorialAnimatedStyle]} />
+            <Animated.View style={[styles.tutorialHalfScreen, styles.rightTutorialHalf, rightTutorialAnimatedStyle]} />
+
+            <View style={styles.tutorialContent}>
+              <Animated.View style={[styles.arrowContainer, styles.leftArrow, leftArrowAnimatedStyle]}>
+                <Ionicons name="close-circle" size={60} color="#fff" />
+                <Text style={styles.arrowLabel}>REJECT</Text>
+              </Animated.View>
+
+              <Animated.View style={[styles.arrowContainer, styles.rightArrow, rightArrowAnimatedStyle]}>
+                <Ionicons name="checkmark-circle" size={60} color="#fff" />
+                <Text style={styles.arrowLabel}>ACCEPT</Text>
+              </Animated.View>
+
+              <Animated.View style={[styles.instructionContainer, textAnimatedStyle]}>
+                <Text style={styles.instructionText}>Swipe right to accept • Swipe left to reject</Text>
+                <Text style={styles.instructionSubtext}>Tap to dismiss tutorial</Text>
+              </Animated.View>
+            </View>
+          </TouchableOpacity>
+        )}
       </LinearGradient>
     </GestureHandlerRootView>
   );
 }
 
-function JobSwipeCard({ 
-  job, 
-  onSwipeLeft, 
-  onSwipeRight, 
-  onBookmark, 
-  isTop, 
-  isSaved, 
-  onSwipeAnimation 
+function JobSwipeCard({
+  job,
+  onSwipeLeft,
+  onSwipeRight,
+  onBookmark,
+  isTop,
+  isSaved,
+  onSwipeAnimation
 }: JobSwipeCardProps & { onSwipeAnimation: (direction: 'left' | 'right') => void }) {
   const translateX = useSharedValue(0);
   const rotate = useSharedValue(0);
@@ -796,10 +796,10 @@ function JobSwipeCard({
     },
     onEnd: (event) => {
       scale.value = withSpring(1);
-      
+
       if (event.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withTiming(width * 1.5, 
-          { duration: 300 }, 
+        translateX.value = withTiming(width * 1.5,
+          { duration: 300 },
           (finished) => {
             if (finished) {
               runOnJS(onSwipeRight)();
@@ -810,8 +810,8 @@ function JobSwipeCard({
         );
         rotate.value = withTiming(8, { duration: 300 });
       } else if (event.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withTiming(-width * 1.5, 
-          { duration: 300 }, 
+        translateX.value = withTiming(-width * 1.5,
+          { duration: 300 },
           (finished) => {
             if (finished) {
               runOnJS(onSwipeLeft)();
@@ -872,7 +872,7 @@ function JobSwipeCard({
     <PanGestureHandler onGestureEvent={gestureHandler}>
       <Animated.View style={[styles.card, animatedStyle]}>
         <JobCardContent job={job} />
-        
+
         <Animated.View style={[styles.likeOverlay, likeOverlayStyle]}>
           <View style={[styles.overlayContent, styles.likeOverlayContent]}>
             <Ionicons name="heart" size={24} color="#22c55e" />
@@ -899,10 +899,10 @@ function JobSwipeCard({
             style={[styles.actionButton, styles.bookmarkButton, isSaved && styles.bookmarkButtonActive]}
             onPress={onBookmark}
           >
-            <Ionicons 
-              name={isSaved ? "bookmark" : "bookmark-outline"} 
-              size={16} 
-              color={isSaved ? "#3b82f6" : "#6b7280"} 
+            <Ionicons
+              name={isSaved ? "bookmark" : "bookmark-outline"}
+              size={16}
+              color={isSaved ? "#3b82f6" : "#6b7280"}
             />
           </TouchableOpacity>
 
@@ -987,7 +987,7 @@ function JobCardContent({ job }: { job: Job }) {
           ))}
         </View>
       )}
-      
+
       <View style={{ height: 70 }} />
     </ScrollView>
   );
